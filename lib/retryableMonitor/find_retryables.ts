@@ -23,7 +23,6 @@ import {
   L1ERC20Gateway,
 } from '@arbitrum/sdk/dist/lib/abi/L1ERC20Gateway'
 import { L1ERC20Gateway__factory } from '@arbitrum/sdk/dist/lib/abi/factories/L1ERC20Gateway__factory'
-
 import {
   ARB_MINIMUM_BLOCK_TIME_IN_SECONDS,
   SEVEN_DAYS_IN_SECONDS,
@@ -31,17 +30,20 @@ import {
 import {
   ChildChainTicketReport,
   ParentChainTicketReport,
+  RETRYABLE_MONITOR_SLACK_CHANNEL_ENV_KEY,
+  RETRYABLE_MONITOR_SLACK_TOKEN_ENV_KEY,
   TokenDepositData,
   getExplorerUrlPrefixes,
   reportFailedTicket,
 } from './report_retryables'
-import { slackMessageRetryablesMonitor } from './slack'
+import { postSlackMessage } from '../common/postSlackMessage'
 
 // Interface defining additional properties for ChildNetwork
 export interface ChildNetwork extends ParentNetwork {
   parentRpcUrl: string
   orbitRpcUrl: string
   parentExplorerUrl: string
+  parentBlockTime: number
 }
 
 // Type for options passed to findRetryables function
@@ -119,7 +121,7 @@ const options: findRetryablesOptions = yargs(process.argv.slice(2))
     fromBlock: { type: 'number', default: 0 },
     toBlock: { type: 'number', default: 0 },
     continuous: { type: 'boolean', default: false },
-    configPath: { type: 'string', default: 'config.json' },
+    configPath: { type: 'string', default: 'retryableMonitor/config.json' },
     enableAlerting: { type: 'boolean', default: false },
   })
   .strict()
@@ -560,7 +562,11 @@ const processOrbitChainsConcurrently = async () => {
     } catch (e) {
       const errorStr = `Retryable monitor - Error processing chain [${childChain.name}]: ${e.message}`
       if (options.enableAlerting) {
-        slackMessageRetryablesMonitor(errorStr)
+        postSlackMessage({
+          slackTokenEnvKey: RETRYABLE_MONITOR_SLACK_TOKEN_ENV_KEY,
+          slackChannelEnvKey: RETRYABLE_MONITOR_SLACK_CHANNEL_ENV_KEY,
+          message: errorStr,
+        })
       }
       console.error(errorStr)
     }
